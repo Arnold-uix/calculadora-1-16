@@ -62,6 +62,37 @@ st.divider()
 st.markdown("**Expresión actual:**")
 st.code(" ".join(st.session_state.tokens) or "(vacío)", language="text")
 
+st.divider()
+
+# ---------------------------------------------------------------
+# Ejemplos rápidos
+# ---------------------------------------------------------------
+def cargar_ejemplo(tokens):
+    st.session_state.tokens = list(tokens)
+
+
+st.markdown("**Ejemplos rápidos:**")
+ejemplos = [
+    ["p", "∧", "q"],
+    ["p", "∨", "q"],
+    ["p", "⊕", "q"],
+    ["p", "→", "q"],
+    ["p", "↔", "q"],
+    ["¬", "p"],
+    ["(", "p", "→", "q", ")", "↔", "(", "¬", "q", "→", "¬", "p", ")"],
+    ["p", "∨", "¬", "p"],
+    ["p", "∧", "¬", "p"],
+]
+for fila in range(0, len(ejemplos), 3):
+    cols = st.columns(3)
+    for j in range(3):
+        ej = ejemplos[fila + j]
+        with cols[j]:
+            st.button("".join(ej), key=f"ej_{fila + j}", on_click=cargar_ejemplo,
+                      args=(ej,), width="stretch")
+
+st.divider()
+
 
 # ---------------------------------------------------------------
 # Lógica central: analizador sintáctico (sin usar eval)
@@ -177,18 +208,60 @@ def generar_tabla(tokens):
 # ---------------------------------------------------------------
 # Ejecución
 # ---------------------------------------------------------------
-if st.button("🚀 Generar Tabla", type="primary", width="stretch"):
-    if not st.session_state.tokens:
-        st.warning("⚠️ Ingresa o construye una expresión primero.")
-    else:
-        try:
-            vars_usadas, filas = generar_tabla(st.session_state.tokens)
-        except (ValueError, IndexError):
-            st.error("❌ Expresión inválida. Revisa operadores y paréntesis.")
-        else:
-            df = pd.DataFrame(filas, columns=vars_usadas + ["Resultado"])
-            st.success(f"✅ Tabla generada para {len(vars_usadas)} variable(s)")
-            st.dataframe(df, width="stretch", hide_index=True)
+generar = st.button("🚀 Generar Tabla", type="primary", width="stretch")
+resultados = st.container()
 
-            csv = df.to_csv(index=False).encode("utf-8")
-            st.download_button("📥 Descargar CSV", csv, "tabla_verdad.csv", "text/csv")
+with st.expander("📚 Guía de Operadores"):
+    st.markdown(
+        """
+| Símbolo | Nombre | Se lee | Es verdadero cuando... |
+|:---:|---|---|---|
+| ¬ | Negación | no p | p es falso |
+| ∧ | Conjunción | p y q | ambos son verdaderos |
+| ∨ | Disyunción | p o q | al menos uno es verdadero |
+| ⊕ | O exclusivo | p o q, pero no ambos | p y q son distintos |
+| → | Implicación | si p entonces q | no ocurre p=1 y q=0 |
+| ↔ | Bicondicional | p si y solo si q | p y q son iguales |
+
+**Precedencia (de mayor a menor):** ¬, ∧, ⊕, ∨, →, ↔. Usa paréntesis para cambiar el orden.
+"""
+    )
+
+st.divider()
+st.caption("🎓 **Estructuras Discretas** - Ingeniería en Software")
+
+if generar:
+    with resultados:
+        if not st.session_state.tokens:
+            st.warning("⚠️ Ingresa o construye una expresión primero.")
+        else:
+            try:
+                vars_usadas, filas = generar_tabla(st.session_state.tokens)
+            except (ValueError, IndexError):
+                st.error("❌ Expresión inválida. Revisa operadores y paréntesis.")
+            else:
+                df = pd.DataFrame(filas, columns=vars_usadas + ["Resultado"])
+                st.success(
+                    f"✅ Tabla generada para {len(vars_usadas)} variable(s) - {len(df)} filas"
+                )
+
+                # Clasificación lógica según la columna Resultado
+                verdaderos = int(df["Resultado"].sum())
+                falsos = len(df) - verdaderos
+                if falsos == 0:
+                    st.info("📊 **Tipo: TAUTOLOGÍA** (siempre verdadera)")
+                elif verdaderos == 0:
+                    st.info("📊 **Tipo: CONTRADICCIÓN** (siempre falsa)")
+                else:
+                    st.info("📊 **Tipo: CONTINGENCIA** (depende de los valores)")
+
+                st.dataframe(df, width="stretch", hide_index=True)
+
+                # Resumen numérico
+                m1, m2, m3 = st.columns(3)
+                m1.metric("Total de filas", len(df))
+                m2.metric("Verdaderos (1)", verdaderos)
+                m3.metric("Falsos (0)", falsos)
+
+                csv = df.to_csv(index=False).encode("utf-8")
+                st.download_button("📥 Descargar CSV", csv, "tabla_verdad.csv", "text/csv")
