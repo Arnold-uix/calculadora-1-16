@@ -1,3 +1,4 @@
+import re
 import streamlit as st
 import pandas as pd
 from itertools import product
@@ -61,6 +62,67 @@ st.divider()
 
 st.markdown("**Expresión actual:**")
 st.code(" ".join(st.session_state.tokens) or "(vacío)", language="text")
+
+st.divider()
+
+# ---------------------------------------------------------------
+# Pegar un ejercicio
+# ---------------------------------------------------------------
+def tokenizar(texto):
+    """Convierte texto escrito o pegado en la lista de símbolos de la calculadora."""
+    texto = texto.lower()
+    for viejo, nuevo in [("<->", " ↔ "), ("<=>", " ↔ "), ("⇔", " ↔ "),
+                         ("->", " → "), ("=>", " → "), ("⇒", " → "),
+                         ("⊻", " ⊕ ")]:
+        texto = texto.replace(viejo, nuevo)
+
+    simbolos = {"∧": "∧", "^": "∧", "&": "∧", "∨": "∨", "|": "∨",
+                "¬": "¬", "~": "¬", "!": "¬", "∼": "¬", "⊕": "⊕",
+                "→": "→", "↔": "↔", "(": "(", ")": ")"}
+    palabras = {"and": "∧", "y": "∧", "or": "∨", "o": "∨", "v": "∨",
+                "not": "¬", "no": "¬", "xor": "⊕"}
+
+    tokens = []
+    for tok in re.findall(r"[a-z]+|[^\sa-z]", texto):
+        if tok in simbolos:
+            tokens.append(simbolos[tok])
+        elif tok in palabras:
+            tokens.append(palabras[tok])
+        elif all(c in variables or c == "v" for c in tok):
+            # Letras pegadas, por ejemplo "pq" o "pvq"
+            tokens.extend("∨" if c == "v" else c for c in tok)
+        else:
+            raise ValueError(f"No reconozco «{tok}». Usa solo las variables p, q, r, s, t, u.")
+    return tokens
+
+
+def cargar_pegado():
+    texto = st.session_state.get("texto_pegado", "").strip()
+    if not texto:
+        st.session_state.error_pegar = "Escribe o pega un ejercicio primero."
+        return
+    try:
+        st.session_state.tokens = tokenizar(texto)
+        st.session_state.error_pegar = ""
+    except ValueError as e:
+        st.session_state.error_pegar = str(e)
+
+
+st.markdown("**Pegar un ejercicio:**")
+st.text_input(
+    "Escribe o pega tu expresión",
+    key="texto_pegado",
+    placeholder="Ej: (p -> q) <-> (~q -> ~p)",
+    label_visibility="collapsed",
+)
+st.button("📋 Cargar en la calculadora", key="cargar_pegado",
+          on_click=cargar_pegado, width="stretch")
+st.caption(
+    "Acepta símbolos (∧ ∨ ¬ ⊕ → ↔) o escritura normal: "
+    "`and`, `or`, `not`, `xor`, `->`, `<->`, `^`, `&`, `|`, `~`, `!`."
+)
+if st.session_state.get("error_pegar"):
+    st.error(f"❌ {st.session_state.error_pegar}")
 
 st.divider()
 
